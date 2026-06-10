@@ -6,6 +6,11 @@ set -euo pipefail
 # Usage:
 #   PROJECT_ID=my-gcp-project ./scripts/collect_logs.sh
 #   PROJECT_ID=my-gcp-project SERVICE_NAME=financial-mlops-api REGION=us-central1 LIMIT=50 ./scripts/collect_logs.sh
+#   PROJECT_ID=my-gcp-project DRY_RUN=true ./scripts/collect_logs.sh
+
+# Homebrew on Apple Silicon may install gcloud outside the default non-login SSH PATH.
+export PATH="/opt/homebrew/share/google-cloud-sdk/bin:/opt/homebrew/bin:${PATH}"
+export CLOUDSDK_PYTHON=${CLOUDSDK_PYTHON:-/opt/homebrew/opt/python@3.13/libexec/bin/python}
 
 PROJECT_ID=${PROJECT_ID:?Set PROJECT_ID}
 REGION=${REGION:-us-central1}
@@ -20,7 +25,7 @@ if ! command -v gcloud >/dev/null 2>&1; then
   exit 127
 fi
 
-FILTER=resource.type=cloud_run_revision AND resource.labels.service_name='' AND resource.labels.location=''
+FILTER="resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE_NAME}\" AND resource.labels.location=\"${REGION}\""
 
 CMD=(gcloud logging read "${FILTER}" \
   --project "${PROJECT_ID}" \
