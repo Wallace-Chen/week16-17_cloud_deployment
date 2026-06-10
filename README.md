@@ -190,61 +190,41 @@ Cloud Run should use environment variables rather than hard-coded secrets or mac
 
 ## Interview Talking Points — Week 16 Day 1-2 Only
 
-### 1. What was the main goal of Week 16 Day 1-2?
+These questions are based directly on the **Topics** list for Day 1-2 in the study plan.
 
-The goal was to move from a local Dockerized ML API mindset to a cloud-runtime architecture mindset. The key question was not “can the model run locally?” but “what cloud runtime should operate this container, and what architecture explains deployment, health checks, logs, revisions, and cost?”
+### 1. How would you compare Cloud Run, ECS/Fargate, and VM deployment for this project?
 
-### 2. Which cloud runtime did you choose as the primary target?
+Cloud Run is the best primary target here because the Week 14-15 service is already a Dockerized FastAPI app. Cloud Run provides a managed HTTPS endpoint, autoscaling, revisions, logging, and scale-to-zero with minimal infrastructure setup.
 
-I chose **Google Cloud Run** as the primary target.
+ECS/Fargate is also production-grade, especially in AWS environments, but it requires more setup around clusters, task definitions, networking, IAM, and often a load balancer.
 
-The Week 14-15 project is already a FastAPI service packaged in Docker, so Cloud Run is a clean fit: it runs containers directly, provides an HTTPS service URL, supports autoscaling to zero, captures logs, and manages revisions without requiring Kubernetes or manual VM operations.
+A VM is the simplest mental model, but it pushes too much operational work onto me: process management, TLS, patching, firewall rules, restarts, and scaling.
 
-### 3. Why Cloud Run instead of AWS ECS/Fargate?
+### 2. What is the difference between a container registry and a runtime service?
 
-ECS/Fargate is production-grade and very useful in AWS environments, but it requires more surrounding infrastructure: task definitions, clusters, networking, load balancer choices, IAM roles, and service configuration.
+A container registry stores built Docker images. For this project, the planned registry is Google Artifact Registry.
 
-For this project, I wanted the simplest credible deployment path that still demonstrates real production concepts. Cloud Run lets me focus on container image, registry, runtime service, endpoint, logs, revisions, and rollback instead of spending most of the time on infrastructure plumbing.
+A runtime service runs the container and exposes it as an application. For this project, the planned runtime is Google Cloud Run.
 
-### 4. Why not deploy on a VM?
-
-A VM would work, but it is less attractive for this portfolio project because I would need to manage more operations myself: process supervision, TLS, firewall rules, patching, restart behavior, and scaling.
-
-A managed container runtime like Cloud Run better matches modern ML service deployment patterns.
-
-### 5. What is the difference between a container registry and a runtime service?
-
-A **container registry** stores versioned container images. In this project, that would be Google Artifact Registry.
-
-A **runtime service** runs the container and exposes it to users or clients. In this project, that would be Google Cloud Run.
-
-The deployment flow is:
+The basic flow is:
 
 ```text
-Docker build → Artifact Registry push → Cloud Run deploy → HTTPS endpoint smoke test
+docker build → push image to Artifact Registry → deploy image to Cloud Run
 ```
 
-### 6. What is the Day 1-2 architecture?
+### 3. What is the difference between a public endpoint and an internal endpoint?
 
-```text
-client / smoke test
-        ↓ HTTPS
-Cloud Run service
-        ↓
-FastAPI app container
-        ↓
-model artifact + metadata
-        ↓
-structured logs
-        ↓
-Cloud Logging / monitoring dashboard
-```
+A public endpoint can be reached from the internet. It is convenient for demos, portfolios, and smoke tests, but it increases security and cost risk.
 
-The client calls the Cloud Run HTTPS URL. Cloud Run routes the request into the FastAPI container. The container loads the model artifact and metadata, validates inputs, returns predictions, and writes structured logs that Cloud Run forwards to Cloud Logging.
+An internal or authenticated endpoint is safer for real systems because access is restricted through IAM, service-to-service identity, or private networking.
 
-### 7. What environment variables matter for this first architecture step?
+For this project, the safe default is authenticated Cloud Run. A public endpoint should only be used temporarily for demo purposes after confirming the image contains no secrets, private data, or trading credentials.
 
-The first version uses simple runtime configuration:
+### 4. Why are environment variables important in cloud deployment?
+
+Environment variables keep runtime configuration separate from code. The same container image can run locally or in Cloud Run with different settings.
+
+For this project, the Day 1-2 local example is:
 
 ```bash
 APP_ENV=local
@@ -253,43 +233,30 @@ MLOPS_PREDICTION_LOG_CSV=logs/predictions.csv
 PORT=8000
 ```
 
-The point is to avoid hard-coded machine-specific assumptions. Local and cloud deployments should be configured through environment variables.
+In Cloud Run, these values can be set at deployment time instead of hard-coded into the app.
 
-### 8. What is the health-check strategy?
+### 5. What are service revisions, and why do they matter?
 
-The service uses `GET /health` to confirm that the API is reachable and the model is loaded. For Day 1-2, this endpoint is the basic readiness signal. A deployment is not considered healthy just because the container starts; it must also load the model successfully.
+A service revision is a versioned deployment of the Cloud Run service. Each time a new container image or service configuration is deployed, Cloud Run creates a new revision.
 
-### 9. What logs or metrics are important at this stage?
+Revisions matter because they make deployment history visible and support safer releases. If a new revision has problems, traffic can be routed back to an older known-good revision.
 
-At the architecture stage, I would track:
+### 6. What health check should this service expose?
 
-- request count
-- error rate
-- p50/p95 latency
-- model version
-- request id
-- prediction latency
-- validation failures
+The service should expose `GET /health`.
 
-The important idea is that an ML service needs both infrastructure observability and model-serving observability.
+For this ML API, a useful health check should confirm not only that the web server is running, but also that the model artifact loaded correctly. A container that starts but cannot load the model is not actually ready to serve predictions.
 
-### 10. What cost feature makes Cloud Run attractive for this project?
+### 7. What logs and metrics matter for this service?
 
-Cloud Run can scale to zero when the service is idle. For a portfolio/demo ML API that may receive occasional traffic, scale-to-zero is valuable because it limits idle cost while preserving a real cloud deployment path.
+Important infrastructure metrics include request count, error rate, latency, CPU, memory, and instance count.
 
-### 11. What security choice would you make for the first cloud design?
+Important model-serving logs include request id, endpoint, model version, latency, validation failures, prediction output, and probability summary.
 
-The safe default is to keep the Cloud Run service authenticated, especially for non-demo deployments. If I make a temporary public portfolio endpoint later, I would first verify that the image contains no secrets, no private data, no trading credentials, and no action-taking capability.
+The key point is that ML services need both system observability and model-serving observability.
 
-### 12. What files did Day 1-2 produce?
+### 8. Why is cost and scale-to-zero relevant here?
 
-The Day 1-2 deliverables are:
+Cloud Run can scale to zero when no requests are coming in. That is useful for a portfolio ML service because the endpoint may only receive occasional traffic.
 
-- `README.md` — project overview, architecture, quick start, Cloud Run plan.
-- `configs/local.env.example` — local runtime environment example.
-- `infra/architecture_diagram.md` — ASCII architecture diagram and component responsibilities.
-- `infra/gcp_cloud_run.md` — Cloud Run resource/deployment design notes.
-
-### 13. How would you summarize Day 1-2 in an interview?
-
-I took an existing Dockerized FastAPI ML service and designed a cloud deployment architecture around it. I selected Google Cloud Run as the primary runtime because it gives a simple managed path from container image to HTTPS service, with built-in logging, revisions, and scale-to-zero. I documented the registry/runtime split, environment variables, health check, logging path, and tradeoffs against ECS/Fargate and VM deployment.
+Scale-to-zero keeps idle cost low while still giving a real cloud deployment path. For demos, I would also set conservative CPU, memory, and max-instance limits to reduce the risk of unexpected cost.
