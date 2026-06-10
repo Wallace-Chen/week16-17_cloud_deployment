@@ -188,63 +188,48 @@ Cloud Run should use environment variables rather than hard-coded secrets or mac
 - I can explain Cloud Run revisions, traffic splitting, logs, health checks, and rollback.
 - I can reason about cost/security tradeoffs for a public ML demo endpoint.
 
-## Week 16 Day 1-2 Study Plan Answers
+## Interview Talking Points — Week 16 Day 1-2
 
-This section directly answers the Week 16 Day 1-2 topics from `Phase3_Week16-17_Cloud_Deployment.md`.
+These answers correspond directly to the **Interview Talking Points** under Day 1-2 in `Phase3_Week16-17_Cloud_Deployment.md`.
 
-### 1. Cloud Run vs ECS/Fargate vs VM deployment
+### 1. Why choose Cloud Run over a VM or Kubernetes for this project?
 
-**Google Cloud Run** is the primary deployment target for this project.
+Cloud Run is the best fit because this project already has a Dockerized FastAPI model-serving app, and Cloud Run can run that container directly as a managed HTTPS service.
 
-Cloud Run is best for this Week 16-17 project because the Week 14-15 model service is already packaged as a Dockerized FastAPI app. Cloud Run can run that container directly, expose an HTTPS endpoint, autoscale, capture logs, create service revisions, and scale to zero when idle.
+Compared with a **VM**, Cloud Run removes a lot of manual operations work: server patching, process supervision, TLS setup, restart policies, firewall management, and manual scaling. A VM would work, but it would make the project more about server administration than ML service deployment.
 
-**AWS ECS/Fargate** is a strong alternative for AWS production environments, but it requires more setup: cluster/service configuration, task definitions, IAM roles, networking, and often a load balancer.
+Compared with **Kubernetes**, Cloud Run is much simpler. Kubernetes is powerful for complex multi-service platforms, but it is unnecessary for a small portfolio ML API. For this project, I mainly need container deployment, service URL, logs, revisions, traffic control, and scale-to-zero. Cloud Run provides those without cluster management.
 
-**VM deployment** is the fallback option. It is simple conceptually, but weaker operationally because I would need to manage process restarts, TLS, patching, firewall rules, monitoring, and scaling myself.
+So the decision is: use Cloud Run because it demonstrates a real cloud deployment path while keeping the infrastructure simple enough to explain clearly.
 
-Decision: **use Cloud Run as the primary path**, keep ECS/Fargate as a comparison point, and use local Docker/architecture docs as fallback if cloud credentials or billing become a blocker.
+### 2. What is the difference between a container registry and a container runtime?
 
-### 2. Container registry vs runtime service
+A **container registry** stores container images. It is where the built Docker artifact lives before deployment. In the Google Cloud path, this would be **Artifact Registry**.
 
-A **container registry** stores Docker images. For the Cloud Run path, the registry would be **Google Artifact Registry**.
+A **container runtime** runs the image as a live service. In this project, the runtime is **Cloud Run**.
 
-A **runtime service** runs the container image and exposes the application. For this project, the runtime service would be **Google Cloud Run**.
-
-Deployment flow:
+The flow is:
 
 ```text
-Build Docker image
-        ↓
-Push image to Artifact Registry
-        ↓
-Deploy image to Cloud Run
-        ↓
-Smoke test the service URL
+docker build
+    ↓
+push image to Artifact Registry
+    ↓
+deploy image to Cloud Run
+    ↓
+Cloud Run runs the FastAPI service behind HTTPS
 ```
 
-Artifact Registry answers: “Where is the image stored?”
+Short version:
 
-Cloud Run answers: “Where is the image running?”
+- Registry = stores the image.
+- Runtime = runs the image.
 
-### 3. Public endpoint vs internal endpoint
+### 3. What should be configurable through environment variables?
 
-A **public endpoint** is reachable from the internet. It is useful for demos and portfolio screenshots, but it creates more security and cost risk.
+Anything that changes between local, staging, and cloud environments should be configurable through environment variables instead of hard-coded in source code.
 
-An **internal or authenticated endpoint** restricts access through IAM or private networking. This is safer for real ML services, especially if the service touches private data, credentials, or business logic.
-
-For this project, the safe default is an authenticated Cloud Run service. A public endpoint is acceptable only as a temporary demo if:
-
-- the container has no secrets
-- the model is educational only
-- there is no trading/execution capability
-- max instances are limited
-- usage is monitored
-
-### 4. Environment variables
-
-Environment variables keep runtime configuration separate from code. The same Docker image can run locally or in Cloud Run with different environment settings.
-
-Local example in `configs/local.env.example`:
+For this project, the important variables are:
 
 ```bash
 APP_ENV=local
@@ -253,87 +238,27 @@ MLOPS_PREDICTION_LOG_CSV=logs/predictions.csv
 PORT=8000
 ```
 
-For Cloud Run, the equivalent values can be passed during deployment:
+Examples:
+
+- `APP_ENV` distinguishes local vs cloud runtime behavior.
+- `MODEL_VERSION` makes logs and responses traceable to a model release.
+- `MLOPS_PREDICTION_LOG_CSV` controls where local prediction audit logs are written.
+- `PORT` lets the service adapt to local Docker or cloud runtime expectations.
+
+In a real deployment, secrets should also be injected through a secret manager or secure runtime environment, not committed to the repo or baked into the Docker image.
+
+### 4. Why does a deployment need both health checks and smoke tests?
+
+A **health check** is a lightweight service-readiness signal. For this app, `GET /health` confirms that the API is running and the model artifact loaded successfully. It answers: “Is the service alive and ready?”
+
+A **smoke test** verifies the deployed system from the outside like a real client. It should call `/health`, `/metadata`, and `/predict` with a sample request. It answers: “Can the deployed endpoint actually serve the expected workflow?”
+
+Both are needed because they catch different problems. A health check may pass even if prediction input/output behavior is broken. A smoke test may catch issues with routing, endpoint URL, request validation, model metadata, or prediction response format.
+
+For this project, the smoke test command is:
 
 ```bash
---set-env-vars APP_ENV=cloud,MODEL_VERSION=0.1.0,MLOPS_PREDICTION_LOG_CSV=/tmp/predictions.csv
+python scripts/smoke_test_endpoint.py --url http://localhost:8000
 ```
 
-No secrets should be hard-coded into the image. If secrets are needed later, they should come from Secret Manager or another runtime secret store.
-
-### 5. Service revisions
-
-A **service revision** is a versioned Cloud Run deployment. Cloud Run creates a new revision when the deployed image or service configuration changes.
-
-Revisions matter because they make deployments safer:
-
-- each release has a traceable version
-- traffic can be shifted between revisions
-- a bad deployment can be rolled back to a previous revision
-- canary releases are possible by splitting traffic
-
-For this project, revisions connect naturally to `MODEL_VERSION` and Docker image tags.
-
-### 6. Health checks
-
-The service should use `GET /health` as the basic health-check endpoint.
-
-For this ML API, a good health check should confirm:
-
-- the API process is running
-- the model artifact loaded successfully
-- the active model version is available
-
-A container that starts but cannot load the model is not actually healthy for prediction serving.
-
-Current expected health response shape:
-
-```json
-{
-  "status": "ok",
-  "model_loaded": true,
-  "model_name": "spy_direction_baseline",
-  "model_version": "0.1.0"
-}
-```
-
-### 7. Logs and metrics
-
-Cloud Run forwards container stdout/stderr to Cloud Logging, so the app should write structured logs.
-
-Important logs for this ML service:
-
-- request id
-- endpoint
-- model version
-- latency
-- prediction result
-- probability summary
-- validation errors
-- feature-count/basic feature statistics
-
-Important metrics:
-
-- request count
-- 4xx/5xx error rate
-- p50/p95 latency
-- CPU and memory usage
-- instance count
-- cold-start behavior
-
-The key idea is that an ML service needs both infrastructure observability and model-serving observability.
-
-### 8. Cost and scale-to-zero
-
-Cloud Run is cost-efficient for this project because it can **scale to zero** when idle. That fits a portfolio ML API, where traffic may be occasional rather than continuous.
-
-Cost controls for this project:
-
-- set `--min-instances 0`
-- set a conservative `--max-instances`
-- use modest CPU and memory
-- avoid excessive logging
-- monitor request volume
-- keep public demo windows temporary
-
-Scale-to-zero gives a realistic cloud deployment path without paying for an always-on VM.
+Later, the same script can test a Cloud Run URL.
