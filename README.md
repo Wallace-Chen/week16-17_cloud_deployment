@@ -25,6 +25,7 @@ This is an educational financial-ML deployment demo, not investment advice.
 ```text
 .
 ├── README.md
+├── DEPLOYMENT.md
 ├── Dockerfile
 ├── docker-compose.yml
 ├── Makefile
@@ -46,6 +47,9 @@ This is an educational financial-ML deployment demo, not investment advice.
 │   └── mlops_system_design.md
 ├── scripts/
 │   ├── build_docker.sh
+│   ├── collect_logs.sh
+│   ├── deploy_cloud_run.sh
+│   ├── rollback_cloud_run.sh
 │   ├── run_local_api.py
 │   ├── smoke_test_api.py
 │   ├── smoke_test_endpoint.py
@@ -141,7 +145,7 @@ The planned cloud flow is:
 6. Inspect Cloud Logging and Cloud Monitoring.
 7. Use Cloud Run revisions for rollback.
 
-Detailed commands and design notes are in [`infra/gcp_cloud_run.md`](infra/gcp_cloud_run.md).
+Detailed commands and design notes are in [`infra/gcp_cloud_run.md`](infra/gcp_cloud_run.md). Day 3-4 deployment commands, log collection, rollback, and smoke-test workflow are in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 Core deployment command shape:
 
