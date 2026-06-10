@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "financial-mlops-model-serving"
+version = "0.1.0"
+description = "Serving-ready financial ML baseline artifact for MLOps foundations"
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi>=0.110",
+  "joblib>=1.1",
+  "numpy>=1.21",
+  "pandas>=1.3",
+  "pydantic>=2.0",
+  "requests>=2.31",
+  "scikit-learn>=1.0",
+  "uvicorn[standard]>=0.27",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

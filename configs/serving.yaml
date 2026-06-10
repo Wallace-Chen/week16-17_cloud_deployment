@@ -1,0 +1,3 @@
+model_path: models/model.pkl
+metadata_path: models/metadata.json
+sample_request_path: data/sample_request.json
