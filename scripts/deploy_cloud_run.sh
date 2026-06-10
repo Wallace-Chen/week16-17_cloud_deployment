@@ -20,6 +20,10 @@ set -euo pipefail
 #   CPU=1
 #   DRY_RUN=false                 # set true to print commands without executing
 
+# Homebrew on Apple Silicon may install gcloud outside the default non-login SSH PATH.
+export PATH="/opt/homebrew/share/google-cloud-sdk/bin:/opt/homebrew/bin:${PATH}"
+export CLOUDSDK_PYTHON=${CLOUDSDK_PYTHON:-/opt/homebrew/opt/python@3.13/libexec/bin/python}
+
 PROJECT_ID=${PROJECT_ID:?Set PROJECT_ID, e.g. PROJECT_ID=my-gcp-project}
 REGION=${REGION:-us-central1}
 REPOSITORY=${REPOSITORY:-mlops}
